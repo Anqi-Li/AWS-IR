@@ -2,8 +2,7 @@ import xarray as xr
 import pandas as pd
 import parse
 from pathlib import Path
-import sshfs
-from .aws_loading import timeslice_cast
+from .utils import timeslice_cast
 
 FILEPATTERN_CPCIR = "merg_{time:%Y%m%d%H}_4km-pixel.nc4"
 PATH_CPCIR = "/scratch/li/cpcir"

@@ -13,6 +13,19 @@ import parse
 import xarray as xr
 from tqdm import tqdm
 
+from .utils import timeslice_cast
+
+FILEPATTERN_L1B = "W_NO-KSAT-Tromso,SAT,{platform_name}-MWR-1B-RAD_C_OHB__{processing_time:%Y%m%d%H%M%S}_G_O_{start_time:%Y%m%d%H%M%S}_{end_time:%Y%m%d%H%M%S}_C_N____.nc"
+
+DATADIR_L1B = os.environ.get(
+    "AWSPROCESSING_DATADIR",
+    (
+        "/data/s6/L1/AWS/L1B"
+        if socket.gethostname() == "geo-c"
+        else Path(__file__).parent.parent.parent / "data"
+    ),
+)
+
 
 @dataclass
 class AWSChannelID:
@@ -56,14 +69,6 @@ class AWSChannel(Enum):
             if channel.value.index0 == index0:
                 return channel
         raise ValueError(f"Channel with 0 based index {index0} not found.")
-
-
-FILEPATTERN_L1B = "W_NO-KSAT-Tromso,SAT,{platform_name}-MWR-1B-RAD_C_OHB__{processing_time:%Y%m%d%H%M%S}_G_O_{start_time:%Y%m%d%H%M%S}_{end_time:%Y%m%d%H%M%S}_C_N____.nc"
-
-DATADIR_L1B = os.environ.get(
-    "AWSPROCESSING_DATADIR",
-    "/data/s6/L1/AWS/L1B" if socket.gethostname() == "geo-c" else Path(__file__).parent.parent.parent / "data",
-)
 
 
 @dataclass
@@ -113,16 +118,26 @@ def augment_with_basic_qa_flag(ds: xr.Dataset) -> xr.Dataset:
     """Add QA flag variable for basic checks of data"""
 
     # brightness temperature values within range
-    flag_bad_ta_value = ((ds.aws_toa_brightness_temperature < 50) | (ds.aws_toa_brightness_temperature > 350)).any(
-        dim=["n_channels", "n_fovs"]
-    )
+    flag_bad_ta_value = (
+        (ds.aws_toa_brightness_temperature < 50)
+        | (ds.aws_toa_brightness_temperature > 350)
+    ).any(dim=["n_channels", "n_fovs"])
     # TODO: Consider the new flags in the L1B file, and add them here as well.
     # NOTE: using a nan check instead of isnull. It appears to cause a segfault in this usecase.
-    flag_bad_latlon = ((ds.aws_lat == np.nan) | (ds.aws_lon == np.nan)).any(dim=["n_geo_groups", "n_fovs"])
-    flag_bad_satellite_altitude = (ds.satellite_altitude < 400) | (ds.satellite_altitude > 800)
+    flag_bad_latlon = ((ds.aws_lat == np.nan) | (ds.aws_lon == np.nan)).any(
+        dim=["n_geo_groups", "n_fovs"]
+    )
+    flag_bad_satellite_altitude = (ds.satellite_altitude < 400) | (
+        ds.satellite_altitude > 800
+    )
     flag_bad_counts = ds.L1B_quality_flag != 1.0
 
-    flags_qa = flag_bad_ta_value | flag_bad_satellite_altitude | flag_bad_latlon | flag_bad_counts
+    flags_qa = (
+        flag_bad_ta_value
+        | flag_bad_satellite_altitude
+        | flag_bad_latlon
+        | flag_bad_counts
+    )
 
     ds["flag_bad_data"] = xr.DataArray(
         data=flags_qa,
@@ -144,7 +159,9 @@ def get_file_l1b(filename) -> Path:
     filepath = Path(DATADIR_L1B) / filename
 
     if not filepath.exists():
-        raise ValueError(f"Could not find file `{filepath}`. Is AWSPROCESSING_DATADIR properly set?")
+        raise ValueError(
+            f"Could not find file `{filepath}`. Is AWSPROCESSING_DATADIR properly set?"
+        )
 
     return filepath
 
@@ -167,7 +184,9 @@ def filter_l1b_filepaths_keep_newest_processing_time(filepaths_sorted, pattern):
             continue  # skip this entry
 
         current_timerange = (parsed["start_time"], parsed["end_time"])
-        if (i > 0 and previous_timerange != current_timerange) or i == num_filepaths - 1:
+        if (
+            i > 0 and previous_timerange != current_timerange
+        ) or i == num_filepaths - 1:
             filtered_paths.append(filepath)
 
         previous_timerange = current_timerange
@@ -175,7 +194,9 @@ def filter_l1b_filepaths_keep_newest_processing_time(filepaths_sorted, pattern):
     return filtered_paths
 
 
-def filter_l1b_filepaths_based_on_timerange(filepaths, pattern, timerange, fully_contain=False):
+def filter_l1b_filepaths_based_on_timerange(
+    filepaths, pattern, timerange, fully_contain=False
+):
     """Return filepaths that contain any part of the given timerange
 
 
@@ -204,35 +225,31 @@ def filter_l1b_filepaths_based_on_timerange(filepaths, pattern, timerange, fully
     return filtered_paths
 
 
-def timeslice_cast(timerange):
-    """Ensure the timerange is a slice of datetime objects"""
-    timerange_start = timerange.start
-    timerange_stop = timerange.stop
-    if isinstance(timerange_start, str):
-        timerange_start = datetime.fromisoformat(timerange_start)
-    if isinstance(timerange_stop, str):
-        timerange_stop = datetime.fromisoformat(timerange_stop)
-
-    return slice(timerange_start, timerange_stop)
-
-
-def get_files_l1b(glob_pattern: str = "W_NO-KSAT-Tromso*.nc", timerange=None) -> Iterable[Path]:
+def get_files_l1b(
+    glob_pattern: str = "W_NO-KSAT-Tromso*.nc", timerange=None
+) -> Iterable[Path]:
     """Get a list of filepaths in the default data directory."""
 
     filepaths = list(Path(DATADIR_L1B).glob(glob_pattern))
 
     if not filepaths:
-        raise ValueError(f"No input files found in `AWSPROCESSING_DATADIR={DATADIR_L1B}`.")
+        raise ValueError(
+            f"No input files found in `AWSPROCESSING_DATADIR={DATADIR_L1B}`."
+        )
 
     filepaths = sort_l1b_filepaths_by_timerange(filepaths)
 
-    filepaths = filter_l1b_filepaths_keep_newest_processing_time(filepaths, FILEPATTERN_L1B)
+    filepaths = filter_l1b_filepaths_keep_newest_processing_time(
+        filepaths, FILEPATTERN_L1B
+    )
 
     if not timerange:
         return filepaths
 
     if timerange:
-        filepaths = filter_l1b_filepaths_based_on_timerange(filepaths, FILEPATTERN_L1B, timerange)
+        filepaths = filter_l1b_filepaths_based_on_timerange(
+            filepaths, FILEPATTERN_L1B, timerange
+        )
 
     return filepaths
 
@@ -252,20 +269,29 @@ class ChannelGeoAccessor:
         """Return DataArray of TOA Tb for channel with corresponding lat-lon coordinates"""
         if isinstance(channel_names_in_group, list):
             # verify that all channels are in the same group
-            chs = [AWSChannel.from_name(channel_name).value for channel_name in channel_names_in_group]
-            assert all(ch.geo_group_name == chs[0].geo_group_name for ch in chs), "Requested channels are not in the same group"
+            chs = [
+                AWSChannel.from_name(channel_name).value
+                for channel_name in channel_names_in_group
+            ]
+            assert all(
+                ch.geo_group_name == chs[0].geo_group_name for ch in chs
+            ), "Requested channels are not in the same group"
             ch = chs[0]
         else:
             ch = AWSChannel.from_name(channel_names_in_group).value
 
-        da = self._ds.aws_toa_brightness_temperature.sel(n_channels=channel_names_in_group)
+        da = self._ds.aws_toa_brightness_temperature.sel(
+            n_channels=channel_names_in_group
+        )
         da.coords["lat"] = self._ds.aws_lat.sel(n_geo_groups=ch.geo_group_name)
         da.coords["lon"] = self._ds.aws_lon.sel(n_geo_groups=ch.geo_group_name)
         return da
 
 
 def sort_l1b_filepaths_by_timerange(filepaths):
-    parsed_filepaths = [parse.parse(FILEPATTERN_L1B, filepath.name) for filepath in filepaths]
+    parsed_filepaths = [
+        parse.parse(FILEPATTERN_L1B, filepath.name) for filepath in filepaths
+    ]
     parsed_filepaths = [p for p in parsed_filepaths if p is not None]
 
     sorted_filepaths = sorted(
@@ -399,7 +425,9 @@ def load_single_l1b(filepath: str, apply_fixes=True):
     if apply_fixes:
         parsed = parse.parse(FILEPATTERN_L1B, Path(filepath).name)
         if parsed is None:
-            raise ValueError(f"Could not parse filename `{filepath}`. Is the filename in the expected format?")
+            raise ValueError(
+                f"Could not parse filename `{filepath}`. Is the filename in the expected format?"
+            )
         if pd.Timestamp(parsed["processing_time"]) < pd.Timestamp("2025-03-13"):
             new_ds = _apply_datafixes_pre_20250313(new_ds)
         else:
@@ -410,7 +438,9 @@ def load_single_l1b(filepath: str, apply_fixes=True):
 
     # Ensure that dimensions match the original L1b file!
     for dim in ["n_scans", "n_geo_groups", "n_channels", "n_fovs"]:
-        assert new_ds.sizes[dim] == dt["data/calibration"].sizes[dim], "Expect loaded dataset to match dimensions of original l1b file."
+        assert (
+            new_ds.sizes[dim] == dt["data/calibration"].sizes[dim]
+        ), "Expect loaded dataset to match dimensions of original l1b file."
 
     # Add index coordinate for the original n_scans, n_fovs dimensions
     # So that if dataset is cropped, we can refer back to the original L1b file.
@@ -481,8 +511,12 @@ def _apply_datafixes_pre_20250313(ds):
     # A * np.cos(2*np.deg2rad(x))) + B
     # Fitted parameters: A=-0.4672222218344105, B=-0.6605555555604291
     # The zero mean over -90 to 90 degrees is latitude is taken by skipping B. We use the average bias-correction from Dave's email for the offset
-    latude_cos_variation = -0.4672 * da.cos(2.0 * da.deg2rad(ds_fixed.aws_lat.sel(n_geo_groups="AWS3X").data))
-    ds_fixed["aws_toa_brightness_temperature"].loc[dict(n_channels="AWS35")].data += latude_cos_variation
+    latude_cos_variation = -0.4672 * da.cos(
+        2.0 * da.deg2rad(ds_fixed.aws_lat.sel(n_geo_groups="AWS3X").data)
+    )
+    ds_fixed["aws_toa_brightness_temperature"].loc[
+        dict(n_channels="AWS35")
+    ].data += latude_cos_variation
 
     return ds_fixed
 
@@ -543,7 +577,11 @@ def _apply_datafixes(ds):
     # A * np.cos(2*np.deg2rad(x))) + B
     # Fitted parameters: A=-0.4672222218344105, B=-0.6605555555604291
     # The zero mean over -90 to 90 degrees is latitude is taken by skipping B. We use the average bias-correction from Dave's email
-    latude_cos_variation = -0.4672 * da.cos(2.0 * da.deg2rad(ds_fixed.aws_lat.sel(n_geo_groups="AWS3X").data))
-    ds_fixed["aws_toa_brightness_temperature"].loc[dict(n_channels="AWS35")].data += latude_cos_variation
+    latude_cos_variation = -0.4672 * da.cos(
+        2.0 * da.deg2rad(ds_fixed.aws_lat.sel(n_geo_groups="AWS3X").data)
+    )
+    ds_fixed["aws_toa_brightness_temperature"].loc[
+        dict(n_channels="AWS35")
+    ].data += latude_cos_variation
 
     return ds_fixed
