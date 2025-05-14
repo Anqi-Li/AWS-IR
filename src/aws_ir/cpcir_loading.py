@@ -2,7 +2,7 @@ import xarray as xr
 import pandas as pd
 import parse
 from pathlib import Path
-from .utils import timeslice_cast
+from aws_ir.utils import timeslice_cast
 
 FILEPATTERN_CPCIR = "merg_{time:%Y%m%d%H}_4km-pixel.nc4"
 PATH_CPCIR = "/scratch/li/cpcir"
@@ -29,8 +29,8 @@ def get_cpcir_fileset(timerange=None):
             continue  # skip this entry
 
         file_datetime = pd.Timestamp(parsed["time"])
-        start_time = file_datetime - pd.Timedelta("30min")
-        end_time = file_datetime + pd.Timedelta("30min")
+        start_time = file_datetime - pd.Timedelta("15min") 
+        end_time = file_datetime + pd.Timedelta("45min")
         if start_time <= timerange.stop and end_time >= timerange.start:
             filtered_paths.append(filepath)
 

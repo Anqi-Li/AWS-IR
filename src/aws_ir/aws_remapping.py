@@ -6,8 +6,8 @@ import numpy as np
 import scipy
 import xarray as xr
 
-from .aws_loading import AWSChannel
-from .utils import get_git_revision
+from aws_ir.aws_loading import AWSChannel
+from aws_ir.utils import get_git_revision
 
 DSCAN = 8
 

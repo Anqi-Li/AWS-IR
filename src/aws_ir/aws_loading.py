@@ -13,7 +13,7 @@ import parse
 import xarray as xr
 from tqdm import tqdm
 
-from .utils import timeslice_cast
+from aws_ir.utils import timeslice_cast
 
 FILEPATTERN_L1B = "W_NO-KSAT-Tromso,SAT,{platform_name}-MWR-1B-RAD_C_OHB__{processing_time:%Y%m%d%H%M%S}_G_O_{start_time:%Y%m%d%H%M%S}_{end_time:%Y%m%d%H%M%S}_C_N____.nc"
 
@@ -363,10 +363,10 @@ def load_single_l1b(filepath: str, apply_fixes=True):
         ("data/navigation", "time_startscan_utc_earthview", FieldDimType.SCAN),
         ("data/navigation", "aws_lat", FieldDimType.GROUP_SCAN_FOV),
         ("data/navigation", "aws_lon", FieldDimType.GROUP_SCAN_FOV),
-        ("data/navigation", "aws_terrain_elevation", FieldDimType.GROUP_SCAN_FOV),
+        # ("data/navigation", "aws_terrain_elevation", FieldDimType.GROUP_SCAN_FOV),
         ("data/navigation", "aws_satellite_zenith_angle", FieldDimType.GROUP_SCAN_FOV),
-        ("data/navigation", "aws_satellite_azimuth_angle", FieldDimType.GROUP_SCAN_FOV),
-        ("data/navigation", "aws_surface_type", FieldDimType.GROUP_SCAN_FOV),
+        # ("data/navigation", "aws_satellite_azimuth_angle", FieldDimType.GROUP_SCAN_FOV),
+        # ("data/navigation", "aws_surface_type", FieldDimType.GROUP_SCAN_FOV),
         ("data/navigation", "satellite_altitude", FieldDimType.SCAN),
         ("quality", "L1B_quality_flag", FieldDimType.SCAN),
         (
