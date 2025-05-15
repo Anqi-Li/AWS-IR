@@ -34,7 +34,6 @@ def get_cpcir_fileset(timerange=None):
         if start_time <= timerange.stop and end_time >= timerange.start:
             filtered_paths.append(filepath)
 
-    # fileset = [fs.get_mapper(file_path) for file_path in filtered_paths]
     return filtered_paths
 
 
