@@ -4,7 +4,8 @@ import pandas as pd
 from aws_ir import aws_loading, cpcir_loading, aws_remapping
 from aws_ir.combine import align_cpcir, package_ml_xy
 
-#%%
+
+# %%
 def save_ml_dataset(time_start, time_end):
 
     timerange = slice(time_start, time_end)
@@ -13,12 +14,17 @@ def save_ml_dataset(time_start, time_end):
     files_aws = aws_loading.get_files_l1b(
         timerange=timerange,
     )
+    if len(files_aws) == 0:
+        print("There is no AWS data in the time range, skip.")
+        return
+
+    # load AWS data
     ds_aws = aws_loading.load_multiple_files_l1b(files_aws, apply_fixes=True)
     ds_aws = ds_aws.sel(time=timerange, n_fovs=slice(40, 100))
     ds_aws = ds_aws.where((ds_aws.flag_bad_data == 0).compute(), drop=True)
 
     if ds_aws.n_scans.size == 0:
-        print('There is no scan met the condition, skip.')
+        print("There is no scan met the condition, skip.")
         return
     # %% remap AWS data
     # skip AWS1X remapping and join the other groups later
@@ -67,7 +73,7 @@ def save_ml_dataset(time_start, time_end):
     )
 
     if ds_aws_remapped.n_scans.size == 0:
-        print('There is no scans within +-60 degrees in latitude')
+        print("There is no scans within +-60 degrees in latitude")
         return
     # %% Load CPCIR data
     files_cpcir = cpcir_loading.get_cpcir_fileset(
@@ -80,6 +86,7 @@ def save_ml_dataset(time_start, time_end):
 
     # compute data
     Xy = package_ml_xy(ds_aws_remapped, ds_cpcir_aligned)
+
     # %% save data
     Xy.reset_index("n_samples").to_netcdf(
         f"./data/aws_cpcir_{time_start.replace('-', '').replace(':', '').replace('T', '')}_{time_end.replace('-', '').replace(':', '').replace('T', '')}.nc"
@@ -87,8 +94,8 @@ def save_ml_dataset(time_start, time_end):
 
 
 # %%
-time_start = "2025-04-10T02:00:00"
-time_end = "2025-04-12T00:00:00"
+time_start = "2025-05-01T00:00:00"
+time_end = "2025-05-31T23:00:00"
 date_range = pd.date_range(time_start, end=time_end, freq="1h")
 for start in date_range:
     print(start)
