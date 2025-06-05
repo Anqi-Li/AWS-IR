@@ -12,9 +12,9 @@ from scipy.stats import binned_statistic
 import json
 
 # %%
-model_tag = "2025-04-20days"
+model_tag = "2025-03-14to2025-05-31_seed4"
 
-timerange = slice("2025-04-01T00:00:00", "2025-04-20T00:00:00")
+timerange = slice("2025-03-14T00:00:00", "2025-05-31T23:00:00")
 filepaths = get_ml_filepaths_by_timerange(timerange=timerange)
 
 # 80% 20% training and testing data
@@ -67,37 +67,28 @@ xgb.plot_importance(
 plt.tight_layout()
 plt.show()
 
-
 # %% Plot predicted vs true values histogram
 y_pred = model.predict(dtest)
 
-
-# %% Plot conditional probability
-def per90(a):
-    return np.percentile(a, 90)
-
-
-def per10(a):
-    return np.percentile(a, 10)
-
-
-n_bins = 30
-bin_edges = np.linspace(180, 330, n_bins + 1)
+# %% Calculate conditional probability
+bin_edges = np.arange(180, 335, 5)
 bin_mid = (bin_edges[:-1] + bin_edges[1:]) / 2
-bin_means, bin_edges, binnumber = binned_statistic(y_test, y_pred, statistic="mean", bins=bin_edges)
-bin_per90, _, _ = binned_statistic(y_test, y_pred, statistic=per90, bins=bin_edges)
-bin_per10, _, _ = binned_statistic(y_test, y_pred, statistic=per10, bins=bin_edges)
-plt.plot(bin_mid, bin_means, label="Mean", c="k")
-plt.plot(bin_mid, bin_per90, label="90th percentile")
-plt.plot(bin_mid, bin_per10, label="10th percentile")
+
+bin_means, _, binnumber = binned_statistic(y_test, y_pred, statistic="mean", bins=bin_edges)
+bin_per90, _, _ = binned_statistic(y_test, y_pred, statistic=lambda x: np.percentile(x, 90), bins=bin_edges)
+bin_per10, _, _ = binned_statistic(y_test, y_pred, statistic=lambda x: np.percentile(x, 10), bins=bin_edges)
 
 h_joint_test_pred, _, _ = np.histogram2d(y_test, y_pred, bins=bin_edges, density=True)
 h_test, _ = np.histogram(y_test, bins=bin_edges, density=True)
 h_conditional = h_joint_test_pred / h_test.reshape(-1, 1)
 h_conditional_nan = np.where(h_conditional > 0, h_conditional, np.nan)
 
-c = plt.contourf(bin_mid, bin_mid, h_conditional_nan.T, cmap="Blues", vmin=0, vmax=0.14)
-# c = plt.pcolormesh(bin_edges, bin_edges, h_conditional_nan.T, cmap="Blues", vmin=0, vmax=0.14)
+# %% Plotting the conditional probability
+plt.plot(bin_mid, bin_means, label="Mean", c="k")
+plt.plot(bin_mid, bin_per90, label="90th percentile")
+plt.plot(bin_mid, bin_per10, label="10th percentile")
+# c = plt.contourf(bin_mid, bin_mid, h_conditional_nan.T, cmap="Blues", vmin=0, vmax=0.14)
+c = plt.pcolormesh(bin_edges, bin_edges, h_conditional_nan.T, cmap="Blues", vmin=0, vmax=0.14)
 plt.colorbar(c, label="Probability density")
 
 # Add diagonal line
@@ -112,11 +103,25 @@ plt.xlim(bin_edges[0], bin_edges[-1])
 plt.ylim(bin_edges[0], bin_edges[-1])
 plt.xlabel("True [K]")
 plt.ylabel("Predicted [K]")
-plt.title("P(Predicted | True)")
+plt.title(
+    f"""
+    AWS -> CPCIR P(Predicted | True)
+    Model tag: {model_tag}
+    """,
+)
+plt.text(
+    -0.1,
+    -0.28,
+    """
+    Conditional probability of predicted given true brightness temperature
+    Mean, 10th and 90th percentiles of predicted values are shown
+    """,
+    transform=plt.gca().transAxes,
+)
 plt.show()
 
-# %%
-np.nansum(h_conditional.T * np.diff(bin_edges), axis=0)
+# %% Double check
+np.nansum(h_conditional_nan.T * np.diff(bin_edges)[:, None], axis=0)
 
 # %% Plot joint probability
 c = plt.contour(
@@ -141,7 +146,7 @@ plt.xlabel("True")
 plt.ylabel("Predicted")
 plt.title("Predicted vs True values histogram")
 plt.show()
-# %% unstack the fov dimension and reconstruct the scene
+# %% Reconstruct the scene
 y = (
     y_test.to_dataset(name="y_true")
     .assign(

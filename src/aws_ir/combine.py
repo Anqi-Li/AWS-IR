@@ -1,6 +1,7 @@
 import datetime
 import xarray as xr
 
+
 def align_cpcir(ds_cpcir, ds_aws_remapped):
     """
     Remap the CPCIR data to the AWS grid.
@@ -11,7 +12,8 @@ def align_cpcir(ds_cpcir, ds_aws_remapped):
         method="nearest",
         tolerance=datetime.timedelta(minutes=30),
     )
-    # linear interpolation of the CPCIR data to the AWS grid
+    # linear spatial interpolation of the CPCIR data to the AWS grid
+    # TODO: copy the the last longitude grid to the first one
     ds_cpcir_aligned = ds_cpcir_aligned.interp(
         lat=ds_aws_remapped.aws_lat,
         lon=ds_aws_remapped.aws_lon,
@@ -50,12 +52,12 @@ def package_ml_xy(ds_aws_remapped, ds_cpcir_aligned):
                 )
             )
         )
-        #replace dims coords to be able to merge
+        # replace dims coords to be able to merge
         .drop_vars(["n_samples", "time", "n_fovs"])
-        .assign_coords(n_samples=X["n_samples"]) 
+        .assign_coords(n_samples=X["n_samples"])
         .compute()
     )
 
     mask = y.notnull().squeeze()
-    Xy = xr.merge([X,y]).where(mask, drop=True)
+    Xy = xr.merge([X, y]).where(mask, drop=True)
     return Xy
