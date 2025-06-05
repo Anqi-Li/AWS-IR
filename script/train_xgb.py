@@ -1,20 +1,14 @@
 # %%
 import xgboost as xgb
-import xarray as xr
 from datetime import datetime
-import numpy as np
-from matplotlib import pyplot as plt
 from aws_ir.ml_loading import get_ml_ds, get_ml_filepaths_by_timerange
-from sklearn.metrics import mean_squared_error
 import random
-import pandas as pd
-from scipy.stats import binned_statistic
 import json
 
 # %%
-model_tag = "2025-04-20days"
+model_tag = "2025-03-14to2025-05-31_seed4"
 
-timerange = slice("2025-04-01T00:00:00", "2025-04-20T00:00:00")
+timerange = slice("2025-04-01T00:00:00", "2025-04-05T23:59:00")
 filepaths = get_ml_filepaths_by_timerange(timerange=timerange)
 
 # 80% 20% training and testing data
@@ -30,7 +24,11 @@ start = datetime.now()
 Xy_train = get_ml_ds(filepaths=filepaths_train)
 X_train = Xy_train.aws_toa_brightness_temperature.T
 y_train = Xy_train.Tb
-dtrain = xgb.DMatrix(X_train, label=y_train, feature_names=X_train.n_channels.values.tolist())
+dtrain = xgb.DMatrix(
+    X_train,
+    label=y_train,
+    feature_names=X_train.n_channels.values.tolist(),
+)
 print("Load data", datetime.now() - start)
 
 # %% Evaluation data
@@ -39,12 +37,18 @@ start = datetime.now()
 Xy_test = get_ml_ds(filepaths=filepaths_test)
 X_test = Xy_test.aws_toa_brightness_temperature.T
 y_test = Xy_test.Tb
-dtest = xgb.DMatrix(X_test, label=y_test, feature_names=X_test.n_channels.values.tolist())
+dtest = xgb.DMatrix(
+    X_test,
+    label=y_test,
+    feature_names=X_test.n_channels.values.tolist(),
+)
 print("Load data", datetime.now() - start)
 
 # %% Load previous model
+model_tag_previous = model_tag  # or 'test
 model_previous = xgb.Booster()
-model_previous.load_model("../data/model/xgb_regressor_test.json")
+model_previous.load_model(f"../data/model/xgb_regressor_{model_tag_previous}.json")
+print("Previous model loaded from file")
 
 # %% Train model
 print("Training XGBoost regression model...")
@@ -77,10 +81,23 @@ model = xgb.train(
 
 print("Model training completed in", datetime.now() - start)
 
-# %% Save evaluation result to a file
+# %% load previous evaluation result from file
+with open("../data/model/evals_result_{}.json".format(model_tag_previous), "r") as f:
+    evals_result_previous = json.load(f)
+print("Previous evaluation results loaded from file")
+evals_result_previous["train"]["rmse"].extend(evals_result["train"]["rmse"])
+evals_result_previous["validation"]["rmse"].extend(evals_result["validation"]["rmse"])
+len(evals_result_previous["train"]["rmse"])
+
+# %%
 with open("../data/model/evals_result_{}.json".format(model_tag), "w") as f:
-    json.dump(evals_result, f)
-print("Evaluation results saved")
+    json.dump(evals_result_previous, f)
+print("Combined evaluation results saved")
+
+# %% Save evaluation result to a file
+# with open("../data/model/evals_result_{}.json".format(model_tag), "w") as f:
+#     json.dump(evals_result, f)
+# print("Evaluation results saved")
 
 # %% Save the model to a file
 model.save_model("../data/model/xgb_regressor_{}.json".format(model_tag))
